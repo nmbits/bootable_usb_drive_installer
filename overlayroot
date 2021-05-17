@@ -1,0 +1,51 @@
+#!/bin/sh
+
+# https://github.com/chesty/overlayroot/blob/master/init-bottom-overlay
+
+PREREQ=""
+prereqs()
+{
+   echo "$PREREQ"
+}
+
+case $1 in
+prereqs)
+   prereqs
+   exit 0
+   ;;
+esac
+
+. /scripts/functions
+
+if grep -q -E '(^|\s)skipoverlay(\s|$)' /proc/cmdline; then
+    log_begin_msg "Skipping overlay, found 'skipoverlay' in cmdline"
+    log_end_msg
+    exit 0
+fi
+
+log_begin_msg "Starting overlay"
+log_end_msg
+
+mkdir -p /overlay
+mount -t tmpfs tmpfs /overlay
+
+mkdir -p /overlay/upper
+mkdir -p /overlay/work
+mkdir -p /overlay/lower
+
+# make the readonly root available
+mount -n -o move ${rootmnt} /overlay/lower
+mount -t overlay overlay -o lowerdir=/overlay/lower,upperdir=/overlay/upper,workdir=/overlay/work ${rootmnt}
+
+mkdir -p ${rootmnt}/overlay
+mount -n -o rbind /overlay ${rootmnt}/overlay
+
+# fix up fstab
+cp ${rootmnt}/etc/fstab ${rootmnt}/etc/fstab.orig
+awk '$2 != "/" {print $0}' ${rootmnt}/etc/fstab.orig > ${rootmnt}/etc/fstab
+awk '$2 == "'${rootmnt}'" { $2 = "/" ; print $0}' /etc/mtab >> ${rootmnt}/etc/fstab
+
+# copy ssroot.conf to ${rootmnt}/
+cp /conf/ssroot.conf ${rootmnt}/
+
+exit 0

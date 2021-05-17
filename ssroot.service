@@ -1,0 +1,12 @@
+[Unit]
+Description=ssroot
+Before=umount.target
+DefaultDependencies=false
+# ConditionKernelCommandLine=subvolss
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ssroot
+
+[Install]
+WantedBy=umount.target
