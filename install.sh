@@ -211,7 +211,6 @@ copy_scripts()
     $DRYRUN chmod 755 $irft/scripts/init-bottom/overlayroot
     $DRYRUN chmod 755 $irft/hooks/overlayss
     $DRYRUN chmod 755 $mountpoint/usr/local/sbin/ssroot
-    $DRYRUN chmod 644 $mountpoint/ssroot.conf
     $DRYRUN chmod 644 $mountpoint/etc/systemd/system/ssroot.service
     $DRYRUN chmod 755 $irft/scripts/local-premount/ssroot_premount
     if [ -z $DRYRUN ]; then
@@ -273,6 +272,38 @@ do_chroot()
 
     rmdir $dir
     return $ret
+}
+
+copy_subvol()
+{
+    local dev_btr=$1
+    local old=$2
+    local new=$3
+
+    if [ -z "$dev_btr" ]; then
+	echo "error: no btrfs device specified." >&2
+	return 1
+    fi
+    if [ -z "$old" ]; then
+	echo "error: no old subvol specified." >&2
+	return 1
+    fi
+    if [ -z "$new" ]; then
+	echo "error: no new subvol specified." >&2
+	return 1
+    fi
+    mountpoint=`mktemp -d`
+    $DRYRUN mount_btrfs $dev_btr $mountpoint /
+    ret=$?
+    if [ $ret -ne 0 ]; then
+	rmdir $mountpoint
+	return $ret
+    fi
+    $DRYRUN btrfs subvol snapshot $mountpoint/$old $mountpoint/$new
+    ret=$?
+    umount_btrfs $mountpoint
+    rmdir $mountpoint
+    return $?
 }
 
 do_apt_kernel()
@@ -364,7 +395,10 @@ main()
 		copy_scripts $BTR @
 		;;
 	    6)
-		do_chroot $EFI $BTR
+		do_chroot $EFI $BTR @
+		;;
+	    7)
+		copy_subvol $BTR @ @.0
 		;;
 	    *)
 		break
@@ -408,7 +442,7 @@ child()
 		ret=$?
 		;;
 	    2)
-		make_fstab $EFI $BTR
+		make_fstab $EFI $BTR @
 		ret=$?
 		;;
 	    3)

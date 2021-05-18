@@ -1,26 +1,53 @@
 #!/bin/sh
 
-SSROOT_CONF=/ssroot.conf
 BTRFSROOT=/ssroot_tmpmnt
-RSYNC_FLAGS="-axS --delete --exclude=$BTRFSROOT --exclude=$SSROOT_CONF"
+RSYNC_FLAGS="-axS --delete --exclude=$BTRFSROOT --exclude=$SSROOT_CONF --exclude=/etc/fstab"
 
-if [ ! -f $SSROOT_CONF ]; then
-    echo "$SSROOT_CONF not found" >&2
+for x in $(cat /proc/cmdline); do
+    case $x in
+	ssroot=*)
+	    SSROOT=${x#ssroot=}
+	    ;;
+	root=*)
+	    ROOT=${x#root=}
+	    ;;
+	rootflags=*)
+	    ROOTFLAGS="-o ${x#rootflags=}"
+	    ;;
+    esac
+done
+
+if [ "xy" != "x$SSROOT" ]; then
     exit 0
 fi
 
-. $SSROOT_CONF
-
 if [ -z "$ROOT" ]; then
+    exit 7
+fi
+
+if [ -z "$ROOTFLGS" ]; then
+    exit 8
+fi
+
+MOUNTOPT=`echo -n $ROOTFLAGS | sed -e "s/^-o \+//"`
+
+for x in `echo -n $MOUNTOPT | sed -e "s/,/ /g"`; do
+    case $x in
+	subvol=*)
+	    SUBVOL=${x#subvol=}
+	    ;;
+	subvolid=*)
+	    SUBVOLID=${x#subvolid=}
+	    ;;
+    esac
+done
+
+if [ -n "$SUBVOLID" ]; then
     exit 0
 fi
 
 if [ -z "$SUBVOL" ]; then
-    exit 0
-fi
-
-if [ -z "$BASENAME" ]; then
-    exit 0
+    exit 1
 fi
 
 if [ -n "$DRYRUN" ]; then
@@ -30,20 +57,21 @@ fi
 if [ ! -e $BTRFSROOT ]; then
     mkdir $BTRFSROOT
     if [ $? -ne 0 ]; then
-	exit 1
+	exit 2
     fi
 fi
+
 if [ ! -d $BTRFSROOT ]; then
-    exit 2
+    exit 3
 fi
 
 mount -t btrfs -o SUBVOL=/ $ROOT $BTRFSROOT
 if [ $? -ne 0 ]; then
-    exit 3
+    exit 4
 fi
 
 for x in `btrfs subvolume list -o $BTRFSROOT | cut -d " " -f 9`; do
-    num=`echo -n $x | sed -r "s/^$BASENAME.([0-9]+)$/\1/"`
+    num=`echo -n $x | sed -r "s/^$SUBVOL.([0-9]+)$/\1/"`
     if [ -n "$num" -a "$num" != "$x" ]; then
 	if [ -z "$max" ]; then
 	    max=$num
@@ -53,30 +81,30 @@ for x in `btrfs subvolume list -o $BTRFSROOT | cut -d " " -f 9`; do
     fi
 done
 
+SUBVOLCUR=$BTRFSROOT/$SUBVOL
 if [ -z "$max" ]; then
-    SUBVOLSS=$BTRFSROOT/${BASENAME}.0
+    SUBVOLSUC=$BTRFSROOT/$SUBVOL.0
 else
-    SUBVOLSS=$BTRFSROOT/${BASENAME}.$(expr $max + 1)
+    SUBVOLSUC=$BTRFSROOT/$SUBVOL.$(expr $max + 1)
 fi
-SUBVOL=$BTRFSROOT/$SUBVOL
 
 tmp=0
 while [ -e ${SUBVOLSS}.${tmp} ]; do
     tmp=`expr $tmp + 1`
 done
-SUBVOLSS_TMP=${SUBVOLSS}.${tmp}
+SUBVOLSUC_TMP=${SUBVOLSUC}.${tmp}
 
-$DRYRUN btrfs subvolume snapshot $SUBVOL $SUBVOLSS_TMP
+$DRYRUN btrfs subvolume snapshot $SUBVOLCUR $SUBVOLSUC_TMP
 if [ $? -ne 0 ]; then
     exit 5
 fi
 
-$DRYRUN rsync $RSYNC_FLAGS / $SUBVOLSS_TMP
+$DRYRUN rsync $RSYNC_FLAGS / $SUBVOLSUC_TMP
 if [ $? -ne 0 ]; then
     exit 6
 fi
 
-$DRYRUN mv $SUBVOLSS_TMP $SUBVOLSS
+$DRYRUN mv $SUBVOLSUC_TMP $SUBVOLSUC
 umount $BTRFSROOT
 
 exit 0

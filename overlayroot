@@ -45,7 +45,4 @@ cp ${rootmnt}/etc/fstab ${rootmnt}/etc/fstab.orig
 awk '$2 != "/" {print $0}' ${rootmnt}/etc/fstab.orig > ${rootmnt}/etc/fstab
 awk '$2 == "'${rootmnt}'" { $2 = "/" ; print $0}' /etc/mtab >> ${rootmnt}/etc/fstab
 
-# copy ssroot.conf to ${rootmnt}/
-cp /conf/ssroot.conf ${rootmnt}/
-
 exit 0
