@@ -89,7 +89,7 @@ else
 fi
 
 tmp=0
-while [ -e ${SUBVOLSS}.${tmp} ]; do
+while [ -e ${SUBVOLSUC}.${tmp} ]; do
     tmp=`expr $tmp + 1`
 done
 SUBVOLSUC_TMP=${SUBVOLSUC}.${tmp}
